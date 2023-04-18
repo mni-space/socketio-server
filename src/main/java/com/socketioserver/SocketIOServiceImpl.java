@@ -2,6 +2,7 @@ package com.socketioserver;
 
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.protocol.Packet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -9,7 +10,6 @@ import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +27,8 @@ public class SocketIOServiceImpl implements ISocketIOService {
      * 自定义事件`push_data_event`,用于服务端与客户端通信
      */
     private static final String PUSH_DATA_EVENT = "push_data_event";
+    private static final String ROOM_ID_PARAM = "roomId";
+    private static final String USER_ID_PARAM = "userId";
 
     @Autowired
     private SocketIOServer socketIOServer;
@@ -51,10 +53,15 @@ public class SocketIOServiceImpl implements ISocketIOService {
     public void start() {
         // 监听客户端连接
         socketIOServer.addConnectListener(client -> {
-            log.debug("************ 客户端： " + getIpByClient(client) + " 已连接 ************");
+            log.info("************ 客户端： " + client.getRemoteAddress() + " 已连接 ************");
             // 自定义事件`connected` -> 与客户端通信  （也可以使用内置事件，如：Socket.EVENT_CONNECT）
-            client.sendEvent("connected", "你成功连接上了哦...");
-            String userId = getParamsByClient(client);
+            String roomId = getParamsByClient(client, ROOM_ID_PARAM);
+            client.joinRoom(roomId);
+            client.sendEvent("connected", "你成功连接上了哦, 房间人数："+client.getCurrentRoomSize(roomId));
+
+            socketIOServer.getRoomOperations(roomId).sendEvent("join", client.getRemoteAddress() + " join room");
+
+            String userId = getParamsByClient(client,USER_ID_PARAM);
             if (userId != null) {
                 clientMap.put(userId, client);
             }
@@ -62,37 +69,33 @@ public class SocketIOServiceImpl implements ISocketIOService {
 
         // 监听客户端断开连接
         socketIOServer.addDisconnectListener(client -> {
-            String clientIp = getIpByClient(client);
-            log.debug(clientIp + " *********************** " + "客户端已断开连接");
-            String userId = getParamsByClient(client);
+            String clientIp = client.getRemoteAddress().toString();
+            log.info(clientIp + " *********************** " + "客户端已断开连接");
+
+            String roomId = getParamsByClient(client, ROOM_ID_PARAM);
+            client.leaveRoom(roomId);
+            socketIOServer.getRoomOperations(roomId).sendEvent("leave",  clientIp +" leave room");
+
+            String userId = getParamsByClient(client,USER_ID_PARAM);
             if (userId != null) {
                 clientMap.remove(userId);
                 client.disconnect();
             }
         });
 
-        // 自定义事件`client_info_event` -> 监听客户端消息
-        socketIOServer.addEventListener(PUSH_DATA_EVENT, String.class, (client, data, ackSender) -> {
-            // 客户端推送`client_info_event`事件时，onData接受数据，这里是string类型的json数据，还可以为Byte[],object其他类型
+        // 自定义事件`push_data_event` -> 监听客户端消息
+        socketIOServer.addEventListener(PUSH_DATA_EVENT, Packet.class, (client, data, ackSender) -> {
+            // 客户端推送`push_data_event`事件时，onData接受数据，这里是string类型的json数据，还可以为Byte[],object其他类型
             String clientIp = getIpByClient(client);
-            log.debug(clientIp + " ************ 客户端：" + data);
+            String roomId = getParamsByClient(client, ROOM_ID_PARAM);
+
+            socketIOServer.getRoomOperations(roomId).sendEvent("message", clientIp + " :  " + data.getData());
+            log.info(clientIp + " ************ 客户端：" + data.getData());
         });
 
         // 启动服务
         socketIOServer.start();
 
-        // broadcast: 默认是向所有的socket连接进行广播，但是不包括发送者自身，如果自己也打算接收消息的话，需要给自己单独发送。
-        new Thread(() -> {
-            while (true) {
-                try {
-                    // 每3秒发送一次广播消息
-                    Thread.sleep(3000);
-                    socketIOServer.getBroadcastOperations().sendEvent("myBroadcast", "广播消息 " + new Date().getTime());
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
     }
 
     @Override
@@ -117,12 +120,12 @@ public class SocketIOServiceImpl implements ISocketIOService {
      * @param client: 客户端
      * @return: java.lang.String
      */
-    private String getParamsByClient(SocketIOClient client) {
+    private String getParamsByClient(SocketIOClient client, String param) {
         // 获取客户端url参数（这里的userId是唯一标识）
         Map<String, List<String>> params = client.getHandshakeData().getUrlParams();
-        List<String> userIdList = params.get("userId");
-        if (!CollectionUtils.isEmpty(userIdList)) {
-            return userIdList.get(0);
+        List<String> paramList = params.get(param);
+        if (!CollectionUtils.isEmpty(paramList)) {
+            return paramList.get(0);
         }
         return null;
     }
@@ -137,5 +140,4 @@ public class SocketIOServiceImpl implements ISocketIOService {
         String sa = client.getRemoteAddress().toString();
         return sa.substring(1, sa.indexOf(":"));
     }
-
 }
