@@ -107,11 +107,8 @@ public class SocketIOServiceImpl implements ISocketIOService {
     }
 
     @Override
-    public void pushMessageToUser(String userId, String msgContent) {
-        SocketIOClient client = clientMap.get(userId);
-        if (client != null) {
-            client.sendEvent(PUSH_DATA_EVENT, msgContent);
-        }
+    public void pushMessageToRoom(String roomId, String msgContent) {
+        socketIOServer.getRoomOperations(roomId).sendEvent("message", msgContent);
     }
 
     /**

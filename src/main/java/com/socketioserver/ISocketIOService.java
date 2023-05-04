@@ -14,8 +14,8 @@ public interface ISocketIOService {
     /**
      * 推送信息给指定客户端
      *
-     * @param userId:     客户端唯一标识
+     * @param roomId:     房间客户端唯一标识
      * @param msgContent: 消息内容
      */
-    void pushMessageToUser(String userId, String msgContent);
+    void pushMessageToRoom(String roomId, String msgContent);
 }

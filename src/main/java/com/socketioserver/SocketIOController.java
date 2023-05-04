@@ -15,8 +15,8 @@ public class SocketIOController {
     private ISocketIOService socketIOService;
 
     @PostMapping("")
-    public ResponseEntity<String> pushMessageToUser(@RequestParam String userId, @RequestParam String msgContent) {
-        socketIOService.pushMessageToUser(userId, msgContent);
+    public ResponseEntity<String> pushMessageToRoom(@RequestParam String roomId, @RequestParam String msgContent) {
+        socketIOService.pushMessageToRoom(roomId, msgContent);
         return ResponseEntity.ok(msgContent);
     }
 
