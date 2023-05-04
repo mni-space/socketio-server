@@ -8,13 +8,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/socket.io")
 public class SocketIOController {
 
     @Autowired
     private ISocketIOService socketIOService;
 
-    @PostMapping("/pushMessageToUser")
+    @PostMapping("/")
     public ResponseEntity<String> pushMessageToUser(@RequestParam String userId, @RequestParam String msgContent) {
         socketIOService.pushMessageToUser(userId, msgContent);
         return ResponseEntity.ok(msgContent);
